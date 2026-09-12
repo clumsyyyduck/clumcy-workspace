@@ -69,7 +69,6 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
   } | null>(null)
   const [appearanceOpen, setAppearanceOpen] = createSignal(false)
   let draggedId = ''
-  let panelPointerInside = false
 
   createEffect(
     () => menu(),
@@ -98,20 +97,19 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
     () => ({ dragging: !!props.draggingWindow, menu: menu() }),
     (state) => {
       if (state.dragging || state.menu) return
-      const dismissOutside = (event: PointerEvent) => {
+      const closeOutside = (event: PointerEvent) => {
         if (props.draggingWindow || menu()) return
         if (
           (event.target as Element | null)?.closest(
-            '[data-testid="workspace-switcher"], [data-testid="workspace-context-menu"]',
+            '[data-testid="workspace-switcher"], [data-testid="workspace-context-menu"], [data-workspace-toggle]',
           )
         ) {
-          panelPointerInside = true
           return
         }
-        if (panelPointerInside) props.onDismiss()
+        props.onDismiss()
       }
-      document.addEventListener('pointermove', dismissOutside)
-      onCleanup(() => document.removeEventListener('pointermove', dismissOutside))
+      document.addEventListener('pointerdown', closeOutside)
+      onCleanup(() => document.removeEventListener('pointerdown', closeOutside))
     },
   )
 
@@ -126,12 +124,6 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
       <aside
         class='fixed left-0 top-1/2 z-[1000001] flex max-h-[72vh] w-72 -translate-y-1/2 flex-col items-stretch overflow-hidden rounded-r-xl border border-l-0 border-border bg-popover/95 px-2 text-popover-foreground shadow-2xl backdrop-blur'
         data-testid='workspace-switcher'
-        onPointerEnter={() => {
-          panelPointerInside = true
-        }}
-        onPointerLeave={() => {
-          if (panelPointerInside && !props.draggingWindow && !menu()) props.onDismiss()
-        }}
       >
         <div class='min-h-0 w-full overflow-y-auto py-3'>
           <Show when={!props.editable}>
