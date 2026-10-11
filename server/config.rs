@@ -54,6 +54,7 @@ struct RawConfig {
     media_ai: MediaAiConfig,
     #[serde(default)]
     music: MusicConfig,
+    todo_folder: Option<String>,
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -212,6 +213,7 @@ pub struct Config {
     pub hermes: Option<HermesConfig>,
     pub media_ai: MediaAiConfig,
     pub music: MusicConfig,
+    pub todo_folder: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -838,6 +840,7 @@ impl Config {
                 .to_string_lossy()
                 .into_owned();
         }
+        let todo_folder = todo_folder(raw.todo_folder, &roots);
         Ok(Self {
             port,
             roots,
@@ -849,8 +852,29 @@ impl Config {
             hermes,
             media_ai,
             music: raw.music,
+            todo_folder,
         })
     }
+}
+
+fn todo_folder(configured: Option<String>, roots: &[MediaRoot]) -> Option<String> {
+    if let Some(folder) = configured {
+        let folder = folder
+            .trim()
+            .replace('\\', "/")
+            .trim_matches('/')
+            .to_string();
+        return (!folder.is_empty()).then_some(folder);
+    }
+    roots.iter().find_map(|root| {
+        let folder = root.editable_folders.first()?.replace('\\', "/");
+        let folder = folder.trim_matches('/');
+        Some(if roots.len() > 1 {
+            format!("{}/{folder}/TODO", root.name)
+        } else {
+            format!("{folder}/TODO")
+        })
+    })
 }
 
 #[cfg(test)]

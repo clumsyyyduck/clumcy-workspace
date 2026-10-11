@@ -41,6 +41,7 @@ export function handleAdminEvent(
   } else if (data.type === 'files-changed' || pathMutation) {
     handlers.invalidate(queryKeys.files())
     handlers.invalidate(queryKeys.adminContent())
+    handlers.invalidate(queryKeys.todo())
     handlers.invalidate(['video-info'])
     handlers.invalidate(['video-subtitles'])
     if (pathMutation) {

@@ -7,4 +7,5 @@ pub mod search;
 pub mod settings;
 pub mod sse;
 pub mod stats;
+pub mod todo;
 pub mod workspaces;

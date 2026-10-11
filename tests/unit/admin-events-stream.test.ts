@@ -80,6 +80,7 @@ describe('admin event routing', () => {
     expect(invalidated).toEqual([
       ['files'],
       ['content', 'admin'],
+      ['todo'],
       ['video-info'],
       ['video-subtitles'],
       ['settings'],

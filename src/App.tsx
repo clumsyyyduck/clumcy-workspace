@@ -5,6 +5,7 @@ import { MediaCenterPage } from './media-center/MediaCenterPage'
 import { WorkspaceRoute } from './workspace/WorkspaceRoute'
 import { GlobalForbiddenToast } from './GlobalForbiddenToast'
 import { AppDialogHost } from './lib/ui/AppDialogHost'
+import { TodoReminderIndicator } from './features/todo/TodoReminderIndicator'
 
 const ReaderDialog = lazy(() =>
   import('./features/reader/ReaderDialog').then((module) => ({ default: module.ReaderDialog })),
@@ -18,6 +19,7 @@ export function App() {
     <>
       <GlobalForbiddenToast />
       <AppDialogHost />
+      <TodoReminderIndicator />
       <Switch
         fallback={
           <>

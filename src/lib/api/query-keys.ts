@@ -17,4 +17,6 @@ export const queryKeys = {
   fileSearch: (query?: string) =>
     query === undefined ? (['file-search'] as const) : (['file-search', query] as const),
   fileSearchStatus: () => ['file-search-status'] as const,
+  todo: () => ['todo'] as const,
+  todoReminders: () => ['todo', 'reminders'] as const,
 } as const

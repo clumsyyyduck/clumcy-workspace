@@ -258,6 +258,14 @@ pub fn list(config: &Config, input: &str) -> AppResult<Vec<FileItem>> {
     } else {
         vec![]
     };
+    if logical.is_empty()
+        && let Some(folder) = &config.todo_folder
+    {
+        items.push(FileItem {
+            path: folder.clone(),
+            ..virtual_item("TODO")
+        });
+    }
     let roots = &config.roots;
     if roots.len() > 1 && logical.is_empty() {
         for r in roots {

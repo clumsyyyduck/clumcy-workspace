@@ -3,6 +3,7 @@ import {
   DEFAULT_FAVICON_DATA_URL,
   generateFaviconFromSvg,
   getLucideIconSvg,
+  getFaviconBaseHref,
   setFaviconHref,
 } from '@/lib/ui/dynamic-favicon-core'
 import type { WorkspaceRecord } from '@/workspace/model/workspace-registry'
@@ -17,8 +18,8 @@ export function useWorkspaceDocumentChrome(
 
   onSettled(() => {
     tabChromeRestore.title = document.title
-    const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null
-    if (link?.href) tabChromeRestore.href = link.href
+    const href = getFaviconBaseHref()
+    if (href) tabChromeRestore.href = href
   })
 
   createEffect(

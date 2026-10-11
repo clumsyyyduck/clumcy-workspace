@@ -629,6 +629,7 @@ mod tests {
                 playback: Default::default(),
                 hermes: None,
                 music: crate::config::MusicConfig::default(),
+                todo_folder: None,
                 media_ai: crate::config::MediaAiConfig {
                     enabled: true,
                     paused: true,

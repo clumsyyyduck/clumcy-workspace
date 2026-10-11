@@ -409,6 +409,7 @@ mod tests {
             playback: Default::default(),
             hermes: None,
             music: crate::config::MusicConfig::default(),
+            todo_folder: None,
             media_ai: Default::default(),
         };
         state_db::initialize(&config).unwrap();

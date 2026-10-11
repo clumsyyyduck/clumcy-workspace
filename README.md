@@ -207,6 +207,29 @@ as a folder. Paths are prefixed by the root name, for example `Movies/Incoming`.
 if the basename is empty, duplicates another media root, or conflicts with a virtual
 folder such as `Favorites` or `Most Played`.
 
+### TODO lists
+
+Files ending in `.todo.json` open as a small task tracker with checklists, notes, a start
+date and an optional reminder one hour before it. A due reminder shows a dot on the browser
+tab icon until it is acknowledged. The library root shows a `TODO` shortcut to the lists
+folder, which defaults to `<first editable folder>/TODO` and is created on startup:
+
+```jsonc
+{
+  "todoFolder": "thoughts/TODO",
+}
+```
+
+Tasks can also be added over HTTP, which is how an agent such as Hermes creates them
+(see [`hermes-skills/todo-tasks/SKILL.md`](hermes-skills/todo-tasks/SKILL.md)):
+
+```bash
+curl -X POST http://localhost:3000/api/todo/tasks -H 'Content-Type: application/json' \
+  -d '{"list":"work","title":"Prepare demo","due":"2026-10-05T14:00","remind":true}'
+```
+
+`GET /api/todo/lists` lists the existing lists.
+
 ## Production
 
 ```bash

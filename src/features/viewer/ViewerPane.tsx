@@ -16,6 +16,8 @@ import { ImageViewerPane } from './ImageViewerPane'
 import { TextEditorPane } from './TextEditorPane'
 import { AudioViewerPane } from './AudioViewerPane'
 import { VideoViewerPane } from './VideoViewerPane'
+import { TodoListPane } from '@/features/todo/TodoListPane'
+import { isTodoPath } from '@/features/todo/todo-model'
 
 const Reader = lazy(() =>
   import('@/features/reader/Reader').then((module) => ({ default: module.Reader })),
@@ -71,6 +73,7 @@ export function ViewerPane(props: Props) {
   )
 
   const mediaType = createMemo(() => getMediaTypeFromPath(viewingPath()))
+  const isTodo = createMemo(() => isTodoPath(viewingPath()))
 
   const downloadHref = createMemo(() => {
     const path = viewingPath()
@@ -218,7 +221,22 @@ export function ViewerPane(props: Props) {
         />
       </Show>
 
-      <Show when={!readerKind() && mediaType() === MediaType.TEXT && viewingPath()} keyed>
+      <Show when={!readerKind() && isTodo() && viewingPath()} keyed>
+        {(sourcePath) => (
+          <TodoListPane
+            viewingPath={sourcePath}
+            editableFolders={props.editableFolders}
+            embedded={props.presentation !== 'modal'}
+            showClose={props.presentation === 'modal'}
+            onClose={props.onClose}
+          />
+        )}
+      </Show>
+
+      <Show
+        when={!readerKind() && !isTodo() && mediaType() === MediaType.TEXT && viewingPath()}
+        keyed
+      >
         {(sourcePath) => (
           <TextEditorPane
             viewingPath={sourcePath}

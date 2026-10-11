@@ -22,9 +22,11 @@ import { Show, createEffect, createMemo, createSignal, onSettled, type Accessor 
 import type { JSX } from '@solidjs/web'
 import type { TaskbarPin } from '@/lib/models/taskbar-pins'
 import { virtualAppearanceForPath, type VirtualAppearance } from './virtual-directory-appearance'
+import { isTodoPath } from '@/features/todo/todo-model'
 import Archive from 'lucide-solid/icons/archive'
 import Bot from 'lucide-solid/icons/bot'
 import FolderKanban from 'lucide-solid/icons/folder-kanban'
+import ListTodo from 'lucide-solid/icons/list-todo'
 import MessageSquare from 'lucide-solid/icons/message-square'
 
 export type FileIconContext = {
@@ -179,6 +181,13 @@ function renderFileIcon(
 
   if (!isVirtual && type === MediaType.FOLDER && knowledgeBases.some((kb) => norm(kb) === fp)) {
     return <BookOpen class={`${cls} text-primary`} size={sz} stroke-width={sw} />
+  }
+
+  if (
+    (type === MediaType.TEXT && isTodoPath(fp)) ||
+    (isVirtual && type === MediaType.FOLDER && fp.split('/').at(-1) === 'TODO')
+  ) {
+    return <ListTodo class={`${cls} text-blue-500`} size={sz} stroke-width={sw} />
   }
 
   switch (type) {

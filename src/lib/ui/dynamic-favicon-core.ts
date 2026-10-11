@@ -39,7 +39,11 @@ export async function generateFaviconFromSvg(
   })
 }
 
-export function setFaviconHref(href: string) {
+let faviconBaseHref: string | null = null
+let faviconBadge = false
+let faviconRenderGeneration = 0
+
+function applyFaviconLink(href: string) {
   const existingLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement
   if (existingLink) {
     existingLink.href = href
@@ -50,6 +54,71 @@ export function setFaviconHref(href: string) {
     link.href = href
     document.head.appendChild(link)
   }
+}
+
+function drawFaviconBadge(baseHref: string): Promise<string> {
+  const size = 32
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return Promise.resolve('')
+  const drawDot = () => {
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.beginPath()
+    ctx.arc(25, 7, 8, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = '#ff9f0a'
+    ctx.beginPath()
+    ctx.arc(25, 7, 6, 0, Math.PI * 2)
+    ctx.fill()
+    return canvas.toDataURL('image/png')
+  }
+  return new Promise<string>((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, size, size)
+      resolve(drawDot())
+    }
+    img.onerror = () => resolve(drawDot())
+    img.src = baseHref
+  })
+}
+
+function renderFavicon() {
+  const generation = ++faviconRenderGeneration
+  const baseHref = faviconBaseHref ?? DEFAULT_FAVICON_DATA_URL
+  if (!faviconBadge) {
+    applyFaviconLink(baseHref)
+    return
+  }
+  void drawFaviconBadge(baseHref).then((badged) => {
+    if (generation === faviconRenderGeneration) applyFaviconLink(badged || baseHref)
+  })
+}
+
+export function setFaviconHref(href: string) {
+  faviconBaseHref = href
+  renderFavicon()
+}
+
+/** Overlays a small dot on the current tab icon, e.g. for a due reminder. */
+export function setFaviconBadge(visible: boolean) {
+  if (faviconBadge === visible) return
+  faviconBadge = visible
+  if (faviconBaseHref === null) {
+    const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null
+    faviconBaseHref = link?.href || DEFAULT_FAVICON_DATA_URL
+  }
+  renderFavicon()
+}
+
+/** The tab icon without any badge overlay. */
+export function getFaviconBaseHref(): string | null {
+  if (faviconBaseHref !== null) return faviconBaseHref
+  const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null
+  return link?.href || null
 }
 
 export type DynamicFaviconNavState = {

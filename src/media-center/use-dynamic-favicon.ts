@@ -4,6 +4,7 @@ import {
   type DynamicFaviconNavState,
   generateFaviconFromSvg,
   getLucideIconSvg,
+  getFaviconBaseHref,
   setFaviconHref,
 } from '@/lib/ui/dynamic-favicon-core'
 import type { Accessor } from 'solid-js'
@@ -35,8 +36,7 @@ export function useDynamicFavicon(
 
   onSettled(() => {
     originals.title = document.title
-    const existingFavicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement
-    originals.href = existingFavicon?.href ?? DEFAULT_FAVICON_DATA_URL
+    originals.href = getFaviconBaseHref() ?? DEFAULT_FAVICON_DATA_URL
   })
 
   createEffect(
