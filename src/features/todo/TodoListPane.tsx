@@ -14,6 +14,7 @@ import {
   onSettled,
   reconcile,
   snapshot,
+  untrack,
 } from 'solid-js'
 import type { JSX } from '@solidjs/web'
 import { api, isApiError, post } from '@/lib/api/client'
@@ -89,10 +90,13 @@ export function TodoListPane(props: TodoListPaneProps): JSX.Element {
     base !== null && serializeTodoDocument(plainDocument(document)) !== serializeTodoDocument(base)
 
   createEffect(
-    () => textQuery.data,
+    () =>
+      textQuery.isPending || textQuery.isError
+        ? undefined
+        : { content: textQuery.data.content, version: textQuery.data.version },
     (remote) => {
       if (!remote) return
-      if (hydrated() && (saving || saveTimer !== null || hasLocalChanges())) return
+      if (untrack(() => hydrated() && (saving || saveTimer !== null || hasLocalChanges()))) return
       try {
         const parsed = parseTodoDocument(remote.content)
         base = parsed

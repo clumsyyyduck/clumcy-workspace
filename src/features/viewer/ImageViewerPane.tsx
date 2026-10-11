@@ -1,9 +1,12 @@
+import { randomId } from '@/lib/random-id'
 import { createActivityId, sendActivity, type ActivityEvent } from '@/features/media-ai/activity'
 import { MediaType, type FileItem } from '@/lib/files/types'
 import Download from 'lucide-solid/icons/download'
 import Maximize2 from 'lucide-solid/icons/maximize-2'
 import RotateCw from 'lucide-solid/icons/rotate-cw'
 import LoaderCircle from 'lucide-solid/icons/loader-circle'
+import Shuffle from 'lucide-solid/icons/shuffle'
+import { shuffleImages } from './image-order'
 import X from 'lucide-solid/icons/x'
 import ZoomIn from 'lucide-solid/icons/zoom-in'
 import ZoomOut from 'lucide-solid/icons/zoom-out'
@@ -11,6 +14,7 @@ import {
   Show,
   untrack,
   createEffect,
+  createRoot,
   createMemo,
   createSignal,
   onSettled,
@@ -29,6 +33,8 @@ export type ImageViewerPaneProps = {
   showClose?: boolean
   active?: Accessor<boolean>
   onNavigate?: (path: string) => void
+  imageSeed?: Accessor<string | null | undefined>
+  onImageSeedChange?: (seed: string | null, path: string) => void
   onClose?: () => void
 }
 
@@ -39,7 +45,12 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
   const dirFromUrl = createMemo(() => urlSearchParams().get('dir') ?? '')
   const directory = createMemo(() => props.directory?.() ?? dirFromUrl())
 
-  const imageFiles = createMemo(() => props.allFiles().filter((f) => f.type === MediaType.IMAGE))
+  const imageSeed = createMemo(() => props.imageSeed?.() ?? null)
+  const imageFiles = createMemo(() => {
+    const files = props.allFiles().filter((f) => f.type === MediaType.IMAGE)
+    const seed = imageSeed()
+    return seed ? shuffleImages(files, seed) : files
+  })
 
   const [zoom, setZoom] = createSignal<number | 'fit'>('fit')
   const [rotation, setRotation] = createSignal(0)
@@ -68,7 +79,7 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
     return index < 0
       ? []
       : imageFiles()
-          .slice(index + 1, index + 3)
+          .slice(index + 1, index + 31)
           .map((file) => file.path)
   })
   const responsiveImage = createResponsiveImage({
@@ -115,12 +126,16 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
         active = visible
       }
       report()
-      createEffect(isActive, () => report())
+      const disposeActivity = createRoot((dispose) => {
+        createEffect(isActive, () => report())
+        return dispose
+      })
       const timer = window.setInterval(report, 5000)
       document.addEventListener('visibilitychange', report)
       window.addEventListener('pagehide', report)
       return () => {
         report()
+        disposeActivity()
         clearInterval(timer)
         document.removeEventListener('visibilitychange', report)
         window.removeEventListener('pagehide', report)
@@ -145,7 +160,13 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
     if (target === i) return
     const path = list[target].path
     if (props.onNavigate) props.onNavigate(path)
-    else viewFile(path, directory() || undefined)
+    else viewFile(path, directory() || undefined, imageSeed())
+  }
+
+  function reshuffleImages() {
+    const seed = randomId()
+    const first = shuffleImages(imageFiles(), seed)[0]
+    if (first) props.onImageSeedChange?.(seed, first.path)
   }
 
   function goNext() {
@@ -348,13 +369,30 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
             </span>
           </div>
         </Show>
-        <div class='flex shrink-0 items-center justify-end gap-1 sm:gap-2'>
+        <div class='flex shrink-0 items-center justify-end gap-0.5 sm:gap-2'>
+          <Show when={props.onImageSeedChange}>
+            <button
+              type='button'
+              title='Shuffle images'
+              aria-label='Shuffle images'
+              class={[
+                props.embedded
+                  ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
+                  : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10',
+                { 'bg-white/20': Boolean(imageSeed()) },
+              ]}
+              disabled={totalImages() === 0}
+              onClick={reshuffleImages}
+            >
+              <Shuffle class={props.embedded ? 'h-3.5 w-3.5' : 'h-5 w-5'} />
+            </button>
+          </Show>
           <button
             type='button'
             class={
               props.embedded
                 ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
-                : 'inline-flex h-11 w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
+                : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
             }
             onClick={handleZoomOut}
           >
@@ -378,7 +416,7 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
             class={
               props.embedded
                 ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
-                : 'inline-flex h-11 w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
+                : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
             }
             onClick={handleZoomIn}
           >
@@ -390,7 +428,7 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
             class={
               props.embedded
                 ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
-                : 'inline-flex h-11 w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
+                : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
             }
             onClick={handleFitToScreen}
           >
@@ -405,7 +443,7 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
             class={
               props.embedded
                 ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
-                : 'inline-flex h-11 w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
+                : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
             }
             onClick={handleRotate}
           >
@@ -425,7 +463,7 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
             class={
               props.embedded
                 ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
-                : 'inline-flex h-11 w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
+                : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
             }
             onClick={handleDownload}
           >
@@ -443,7 +481,7 @@ export function ImageViewerPane(props: ImageViewerPaneProps): JSX.Element {
               class={
                 props.embedded
                   ? 'inline-flex h-7 w-7 items-center justify-center rounded-md text-white hover:bg-white/10'
-                  : 'inline-flex h-11 w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
+                  : 'inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-md text-white hover:bg-white/10'
               }
               onClick={handleClose}
             >

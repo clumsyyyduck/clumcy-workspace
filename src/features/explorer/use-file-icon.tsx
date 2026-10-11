@@ -18,7 +18,15 @@ import Pause from 'lucide-solid/icons/pause'
 import Play from 'lucide-solid/icons/play'
 import Star from 'lucide-solid/icons/star'
 import Video from 'lucide-solid/icons/video'
-import { Show, createEffect, createMemo, createSignal, onSettled, type Accessor } from 'solid-js'
+import {
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onSettled,
+  runWithOwner,
+  type Accessor,
+} from 'solid-js'
 import type { JSX } from '@solidjs/web'
 import type { TaskbarPin } from '@/lib/models/taskbar-pins'
 import { virtualAppearanceForPath, type VirtualAppearance } from './virtual-directory-appearance'
@@ -303,7 +311,7 @@ function GridMediaThumbnail(props: { file: FileItem; ctx: FileIconContext }): JS
             releaseLoadSlot()
             return
           }
-          setQueuedSrc(url)
+          runWithOwner(null, () => setQueuedSrc(url))
         })
       }
 
@@ -338,7 +346,8 @@ function GridMediaThumbnail(props: { file: FileItem; ctx: FileIconContext }): JS
       return () => {
         observer?.disconnect()
         clearSettleTimer()
-        cancelLoad()
+        loadTicket?.cancel()
+        loadTicket = undefined
       }
     },
   )

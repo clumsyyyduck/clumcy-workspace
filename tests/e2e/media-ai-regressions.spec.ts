@@ -1,6 +1,55 @@
 import { expect } from '@playwright/test'
 import { test, type Home } from './media-ai-regression-helpers'
 
+test('four music batches overlap without reviewing the same file twice', async ({
+  request,
+  library,
+}) => {
+  test.setTimeout(45000)
+  await library.seed(48)
+  await expect
+    .poll(() => library.database.prepare('SELECT count(*) AS n FROM music_tracks').get()?.n)
+    .toBe(48)
+  const release = library.pauseProvider()
+  try {
+    await request.post(`${library.url}/api/music/refresh`, { data: {} })
+    await expect.poll(() => library.providerActivity.active).toBe(4)
+    const batches = library.providerRequests.filter(
+      (r) => r.response_format.json_schema.schema.properties?.musicReviews,
+    )
+    expect(batches).toHaveLength(4)
+    const ids = batches.flatMap(
+      (r) =>
+        r.response_format.json_schema.schema.properties?.musicReviews?.items?.properties?.id
+          ?.enum ?? [],
+    )
+    expect(ids).toHaveLength(48)
+    expect(new Set(ids).size).toBe(48)
+    release()
+    await expect
+      .poll(() => library.database.prepare('SELECT count(*) AS n FROM music_reviews').get()?.n)
+      .toBe(48)
+    await expect
+      .poll(
+        () =>
+          library.database
+            .prepare("SELECT count(*) AS n FROM media_catalog WHERE analyzed>0 AND description!=''")
+            .get()?.n,
+      )
+      .toBe(48)
+    await request.post(`${library.url}/api/music/refresh`, { data: {} })
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+    expect(library.providerActivity.peak).toBe(4)
+    expect(
+      library.providerRequests.filter(
+        (r) => r.response_format.json_schema.schema.properties?.musicReviews,
+      ),
+    ).toHaveLength(4)
+  } finally {
+    release()
+  }
+})
+
 test('opening and changing For You categories only reads cached AI results', async ({
   page,
   library,
@@ -42,9 +91,43 @@ test.describe('activity over plain HTTP', () => {
     const queue = page.getByRole('dialog', { name: 'Up next' })
     await expect(queue).toBeVisible()
     await expect(queue.getByRole('button', { name: 'Continue with radio' })).toHaveCount(0)
-    const response = await page.request.post(`${library.url}/api/music/radio`, { data: {} })
+    const response = await page.request.post(`${library.url}/api/music/radio`, {
+      data: {},
+    })
     expect(response.status()).toBe(400)
     expect(library.providerRequests).toEqual([])
+  })
+
+  test('concurrent activity reports persist every session without database lock errors', async ({
+    request,
+    library,
+  }) => {
+    const [song] = await library.seed(1)
+    const end = Date.now()
+    const ids = Array.from({ length: 32 }, () => crypto.randomUUID())
+    const responses = await Promise.all(
+      ids.map((id) =>
+        request.post(`${library.url}/api/activity`, {
+          data: {
+            id,
+            path: song!.path,
+            kind: 'audio',
+            source: 'chosen',
+            seq: 0,
+            start: end - 1000,
+            end,
+            seconds: 1,
+            duration: 60,
+            hour: 12,
+            completed: false,
+            excluded: false,
+          },
+        }),
+      ),
+    )
+    expect(responses.map((response) => response.status())).toEqual(ids.map(() => 200))
+    const rows = library.database.prepare('SELECT id FROM media_sessions').all()
+    expect(new Set(rows.map((row) => row.id))).toEqual(new Set(ids))
   })
 
   test('opening audio works without secure-context crypto.randomUUID', async ({
@@ -53,14 +136,22 @@ test.describe('activity over plain HTTP', () => {
   }) => {
     const [song] = await library.seed(1)
     const origin = 'http://media-ai-regression.test'
+    // This fixture mocks its HTTP origin; mock the Vite HMR connection too.
+    await page.routeWebSocket(
+      (url) => url.searchParams.has('token'),
+      (socket) => {
+        socket.send(JSON.stringify({ type: 'connected' }))
+      },
+    )
     await page.route(`${origin}/**`, async (route) => {
       const url = new URL(route.request().url())
       if (url.pathname === '/api/events/stream') {
         await route.abort()
         return
       }
-      const response = await route.fetch({ url: `${library.url}${url.pathname}${url.search}` })
-      await route.fulfill({ response })
+      await route.continue({
+        url: `${library.url}${url.pathname}${url.search}`,
+      })
     })
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
@@ -71,6 +162,7 @@ test.describe('activity over plain HTTP', () => {
     await expect.soft(page).toHaveURL(new RegExp(`playing=${encodeURIComponent(song.path)}`))
     expect(errors).toEqual([])
     await expect(page.getByTestId('audio-player-chrome')).toBeVisible()
+    await page.unrouteAll({ behavior: 'wait' })
   })
 })
 
@@ -118,7 +210,9 @@ test('hiding cached picks still allows the next recommendation page to generate'
   const first = (await firstResponse.json()) as Home
   expect(first.rows.flatMap((row) => row.items)).toHaveLength(23)
   expect(first.warming).toBe(true)
-  await request.post(`${library.url}/api/media-ai/refresh`, { data: { hour: 12 } })
+  await request.post(`${library.url}/api/media-ai/refresh`, {
+    data: { hour: 12 },
+  })
   let nextItems: Home['rows'][number]['items'] = []
   await expect
     .poll(async () => {
@@ -144,7 +238,9 @@ test('a fresh single-root library can recommend files directly in its root', asy
   expect(response.ok()).toBe(true)
   const result = (await response.json()) as Home
   expect(result.warming).toBe(true)
-  await request.post(`${library.url}/api/media-ai/refresh`, { data: { hour: 12 } })
+  await request.post(`${library.url}/api/media-ai/refresh`, {
+    data: { hour: 12 },
+  })
   let picks: Home['rows'][number]['items'] = []
   await expect
     .poll(async () => {
@@ -166,7 +262,9 @@ test('real refresh and pagination stay responsive while the provider is blocked'
   const release = library.pauseProvider()
   try {
     const first = (await (await request.get(`${library.url}/api/media-ai/home`)).json()) as Home
-    await request.post(`${library.url}/api/media-ai/refresh`, { data: { hour: 12 } })
+    await request.post(`${library.url}/api/media-ai/refresh`, {
+      data: { hour: 12 },
+    })
     await expect.poll(() => library.providerRequests.length).toBeGreaterThan(0)
     const refreshedResponse = await request.post(`${library.url}/api/media-ai/refresh`, {
       data: { hour: 9 },
@@ -196,7 +294,9 @@ test('background ranking advances beyond the first truncated collection inventor
 }) => {
   test.setTimeout(30000)
   await library.seed(300)
-  await request.post(`${library.url}/api/media-ai/refresh`, { data: { hour: 12 } })
+  await request.post(`${library.url}/api/media-ai/refresh`, {
+    data: { hour: 12 },
+  })
   await expect
     .poll(
       () => {
@@ -208,4 +308,278 @@ test('background ranking advances beyond the first truncated collection inventor
       { timeout: 20000 },
     )
     .toBeGreaterThanOrEqual(75)
+})
+
+test('Library keeps its directory when returning from For you', async ({ page, library }) => {
+  await library.seed(1, 'Books/Nested')
+  await page.goto(`${library.url}/?view=library&dir=Books%2FNested`)
+  const navigation = page.getByRole('navigation', { name: 'Media center' })
+  await navigation.getByRole('button', { name: 'For you', exact: true }).click()
+  await expect(page.getByTestId('for-you')).toBeVisible()
+  await page.reload()
+  await navigation.getByRole('button', { name: 'Library', exact: true }).click()
+  await expect.poll(() => new URL(page.url()).searchParams.get('dir')).toBe('Books/Nested')
+  await expect(page.getByText('song-001.mp3', { exact: true }).first()).toBeVisible()
+})
+
+test('Continue reading prioritizes saved books and updates across devices', async ({
+  page,
+  library,
+  playwright,
+}) => {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  for (const name of ['Current.fb2', 'Earlier.fb2', 'Old.fb2', 'Replaced.fb2', 'Private.fb2']) {
+    fs.writeFileSync(
+      path.join(library.mediaDirectory, name),
+      '<?xml version="1.0"?><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><description><title-info><book-title>Reading test</book-title><lang>en</lang></title-info></description><body><section><p>Continue this book.</p></section></body></FictionBook>',
+    )
+  }
+  const device = await playwright.request.newContext({ baseURL: library.url })
+  try {
+    for (const [name, progress] of [
+      ['Earlier.fb2', 0.3],
+      ['Current.fb2', 0.6],
+      ['Old.fb2', 0],
+      ['Replaced.fb2', 0.4],
+    ] as const) {
+      const saved = await (await device.get(`/api/reader-state?path=${name}`)).json()
+      expect(
+        (
+          await device.post('/api/reader-state', {
+            data: {
+              path: name,
+              state: { kind: 'book', progress },
+              fingerprint: saved.fingerprint,
+              baseRevision: saved.revision,
+            },
+          })
+        ).ok(),
+      ).toBe(true)
+    }
+    library.database.prepare("UPDATE reader_state SET updated_at=1 WHERE path='Old.fb2'").run()
+    library.database
+      .prepare(
+        "INSERT INTO reader_state(scope,path,state_json,fingerprint,revision,updated_at) VALUES('share','Private.fb2','{}','private',1,?)",
+      )
+      .run(Date.now())
+    fs.appendFileSync(path.join(library.mediaDirectory, 'Replaced.fb2'), ' ')
+    const books = await (await device.get('/api/media-ai/reading')).json()
+    expect(books.items.map((item: { path: string }) => item.path)).toEqual([
+      'Current.fb2',
+      'Earlier.fb2',
+    ])
+    await page.goto(`${library.url}/?view=for-you`)
+    const shelf = page.getByRole('region', { name: 'Books', exact: true })
+    await expect(shelf.getByText('60%', { exact: true })).toBeVisible()
+    const saved = await (await device.get('/api/reader-state?path=Earlier.fb2')).json()
+    expect(
+      (
+        await device.post('/api/reader-state', {
+          data: {
+            path: 'Earlier.fb2',
+            state: { kind: 'book', progress: 0.8 },
+            fingerprint: saved.fingerprint,
+            baseRevision: saved.revision,
+          },
+        })
+      ).ok(),
+    ).toBe(true)
+    await expect(shelf.getByText('80%', { exact: true })).toBeVisible()
+    await expect(
+      shelf
+        .getByRole('article')
+        .first()
+        .getByRole('button', { name: 'Read Earlier.fb2', exact: true }),
+    ).toBeVisible()
+    await shelf.getByRole('button', { name: 'Read Earlier.fb2', exact: true }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get('reader')).toBe('Earlier.fb2')
+    await expect(page.getByRole('dialog')).toBeVisible()
+  } finally {
+    await device.dispose()
+  }
+})
+
+test('AI search returns books without requiring a thumbnail', async ({ page, library }) => {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  fs.writeFileSync(path.join(library.mediaDirectory, 'book.fb2'), '<FictionBook/>')
+  expect(
+    (
+      await page.request.post(`${library.url}/api/files/search/reindex`, {
+        data: { mode: 'full' },
+      })
+    ).ok(),
+  ).toBe(true)
+  await expect
+    .poll(
+      () =>
+        library.database.prepare("SELECT kind FROM media_catalog WHERE path='book.fb2'").get()
+          ?.kind,
+    )
+    .toBe('book')
+  const result = await page.request.post(`${library.url}/api/media-ai/ask`, {
+    data: { query: 'book', history: [], hour: 12 },
+  })
+  expect(result.ok()).toBe(true)
+  const answer = await result.json()
+  expect(answer.items).toEqual([
+    expect.objectContaining({
+      path: 'book.fb2',
+      type: 'book',
+      previewKind: 'text',
+    }),
+  ])
+  await page.goto(`${library.url}/?view=for-you`)
+  await page.getByRole('button', { name: 'Search library', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Search your library' }).fill('book')
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Read book.fb2', exact: true })).toBeVisible()
+})
+
+test('book feeds paginate only books while More for you still includes music', async ({
+  page,
+  library,
+}) => {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const songs = await library.seed(2)
+  const books = Array.from({ length: 30 }, (_, index) => {
+    const name = `book-${index}.fb2`
+    fs.writeFileSync(path.join(library.mediaDirectory, name), '<FictionBook/>')
+    return {
+      id: 100 + index,
+      path: name,
+      name,
+      type: 'book',
+      previewReady: true,
+    }
+  })
+  library.cache([...songs, ...books])
+  const first = (await (
+    await page.request.get(`${library.url}/api/media-ai/home?category=books`)
+  ).json()) as Home
+  expect(first.rows.flatMap((row) => row.items)).toHaveLength(24)
+  expect(first.rows.flatMap((row) => row.items).every((item) => item.type === 'book')).toBe(true)
+  const next = (await (
+    await page.request.get(
+      `${library.url}/api/media-ai/home?category=books&feedId=${first.feedId}&cursor=${first.nextCursor}`,
+    )
+  ).json()) as Home
+  expect(next.rows.flatMap((row) => row.items)).toHaveLength(6)
+  expect(next.rows.flatMap((row) => row.items).every((item) => item.type === 'book')).toBe(true)
+  expect(next.nextCursor).toBeNull()
+  const mixed = (await (await page.request.get(`${library.url}/api/media-ai/home`)).json()) as Home
+  const mixedNext =
+    mixed.nextCursor == null
+      ? []
+      : (
+          (await (
+            await page.request.get(
+              `${library.url}/api/media-ai/home?feedId=${mixed.feedId}&cursor=${mixed.nextCursor}`,
+            )
+          ).json()) as Home
+        ).rows.flatMap((row) => row.items)
+  expect(
+    [...mixed.rows.flatMap((row) => row.items), ...mixedNext].some((item) => item.type === 'audio'),
+  ).toBe(true)
+  expect(mixed.feedId).not.toBe(first.feedId)
+  const wrongFeed = await page.request.get(
+    `${library.url}/api/media-ai/home?category=video&feedId=${first.feedId}`,
+  )
+  expect(wrongFeed.status()).toBe(409)
+  const video = (await (
+    await page.request.get(`${library.url}/api/media-ai/home?category=video`)
+  ).json()) as Home
+  expect(video.rows.flatMap((row) => row.items)).toEqual([])
+})
+
+test.describe('book recommendations', () => {
+  test.use({ aiPaused: false })
+  test('concurrent catalog batches analyze each book once', async ({ request, library }) => {
+    test.setTimeout(45000)
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const release = library.pauseProvider()
+    try {
+      for (let i = 0; i < 20; i++)
+        fs.writeFileSync(path.join(library.mediaDirectory, `Book ${i}.fb2`), '<FictionBook/>')
+      await request.post(`${library.url}/api/files/search/reindex`, { data: { mode: 'full' } })
+      await expect.poll(() => library.providerActivity.active).toBe(4)
+      const analysisIds = () =>
+        library.providerRequests
+          .filter(
+            (r) =>
+              r.response_format.json_schema.schema.properties?.items?.items?.properties
+                ?.description,
+          )
+          .flatMap((r) => {
+            const content = r.messages.find((message) => message.role === 'user')?.content
+            const text =
+              typeof content === 'string' ? content : content?.find((part) => part.text)?.text
+            return (JSON.parse(text ?? '{}') as { items: { id: number }[] }).items.map(
+              (item) => item.id,
+            )
+          })
+      expect(analysisIds().length).toBeGreaterThanOrEqual(8)
+      expect(new Set(analysisIds()).size).toBe(analysisIds().length)
+      release()
+      await expect
+        .poll(
+          () =>
+            library.database
+              .prepare('SELECT count(*) AS n FROM media_catalog WHERE analyzed>0')
+              .get()?.n,
+        )
+        .toBe(20)
+      expect(analysisIds()).toHaveLength(20)
+      expect(new Set(analysisIds()).size).toBe(20)
+      expect(library.providerActivity.peak).toBe(4)
+    } finally {
+      release()
+    }
+  })
+
+  test('AI reviews unread books and publishes them to the book block', async ({
+    page,
+    library,
+  }) => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const release = library.pauseProvider()
+    try {
+      fs.writeFileSync(path.join(library.mediaDirectory, 'Unread book.fb2'), '<FictionBook/>')
+      await page.request.post(`${library.url}/api/files/search/reindex`, {
+        data: { mode: 'full' },
+      })
+      await page.goto(`${library.url}/?view=for-you`)
+      await expect(page.getByTestId('for-you')).toBeVisible()
+      release()
+      const shelf = page.getByRole('region', { name: 'Books', exact: true })
+      await expect(
+        shelf.getByRole('button', {
+          name: 'Read Unread book.fb2',
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: 30000 })
+      await shelf.getByRole('button', { name: 'See all' }).click()
+      await expect(shelf.getByText('Matching fixture media')).toBeVisible()
+      const response = await (await page.request.get(`${library.url}/api/media-ai/books`)).json()
+      expect(response.items).toEqual([
+        expect.objectContaining({ path: 'Unread book.fb2', aiScore: 85 }),
+      ])
+      expect(
+        library.database.prepare('SELECT count(*) AS count FROM reader_state').get()?.count,
+      ).toBe(0)
+      expect(
+        library.database
+          .prepare(
+            "SELECT count(*) AS count FROM media_ai_reviewed_files WHERE path='Unread book.fb2'",
+          )
+          .get()?.count,
+      ).toBe(1)
+    } finally {
+      release()
+    }
+  })
 })

@@ -13,7 +13,7 @@ import Plus from 'lucide-solid/icons/plus'
 import Trash2 from 'lucide-solid/icons/trash-2'
 import ChevronRight from 'lucide-solid/icons/chevron-right'
 import { Dynamic } from '@solidjs/web'
-import { For, Show, createEffect, createSignal, onCleanup, untrack } from 'solid-js'
+import { For, Show, createEffect, createSignal, untrack } from 'solid-js'
 
 export type WorkspaceSwitcherProps = {
   open: boolean
@@ -73,7 +73,7 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
   createEffect(
     () => menu(),
     (currentMenu) => {
-      if (!currentMenu) return
+      if (!currentMenu) return undefined
       const close = (event?: PointerEvent) => {
         if ((event?.target as Element | null)?.closest('[data-testid="workspace-context-menu"]')) {
           return
@@ -86,17 +86,17 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
       }
       document.addEventListener('pointerdown', close)
       document.addEventListener('keydown', onKey)
-      onCleanup(() => {
+      return () => {
         document.removeEventListener('pointerdown', close)
         document.removeEventListener('keydown', onKey)
-      })
+      }
     },
   )
 
   createEffect(
     () => ({ dragging: !!props.draggingWindow, menu: menu() }),
     (state) => {
-      if (state.dragging || state.menu) return
+      if (state.dragging || state.menu) return undefined
       const closeOutside = (event: PointerEvent) => {
         if (props.draggingWindow || menu()) return
         if (
@@ -109,7 +109,7 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
         props.onDismiss()
       }
       document.addEventListener('pointerdown', closeOutside)
-      onCleanup(() => document.removeEventListener('pointerdown', closeOutside))
+      return () => document.removeEventListener('pointerdown', closeOutside)
     },
   )
 
@@ -218,7 +218,7 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
                             const name = event.currentTarget.value.trim()
                             setEditing(null)
                             setMenu(null)
-                            void props.onRename(id, name).catch(() => {})
+                            void untrack(() => props.onRename(id, name)).catch(() => {})
                           }}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') {
@@ -226,7 +226,7 @@ function WorkspaceSwitcherPanel(input: { props: WorkspaceSwitcherProps }) {
                               const name = event.currentTarget.value.trim()
                               setEditing(null)
                               setMenu(null)
-                              void props.onRename(id, name).catch(() => {})
+                              void untrack(() => props.onRename(id, name)).catch(() => {})
                             }
                             if (event.key === 'Escape') {
                               setEditing(null)

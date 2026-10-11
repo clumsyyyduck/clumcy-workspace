@@ -1,3 +1,4 @@
+import { randomId } from '@/lib/random-id'
 import { createSignal } from 'solid-js'
 import type { QueryClient } from '@tanstack/solid-query'
 import { radioTracks, recordingKey } from './radio'
@@ -31,6 +32,8 @@ export function playMusic(
     notifyMusic('There are no tracks to play yet')
     return
   }
+  const params = new URLSearchParams(window.location.search)
+  const defaultHome = !['view', 'dir', 'playing', 'viewing'].some((key) => params.has(key))
   session.dispatch({
     type: 'load',
     item: musicItem(track),
@@ -41,7 +44,10 @@ export function playMusic(
     queueContext: context,
     autoplay: true,
   })
-  navigateSearchParams({ playing: track.path, audioOnly: null }, 'push')
+  navigateSearchParams(
+    { playing: track.path, audioOnly: null, ...(defaultHome ? { view: 'for-you' } : {}) },
+    'push',
+  )
 }
 
 export const defaultRadio: RadioOptions = {
@@ -61,7 +67,7 @@ export function continueRadio(session: PlaybackSession) {
     context: {
       kind: 'radio',
       title: `${current.name} radio`,
-      id: crypto.randomUUID(),
+      id: randomId(),
       radio: { ...defaultRadio, seeds: [current.locator] },
     },
   })
@@ -84,7 +90,7 @@ export function startRadio(
   const tracks = seed
     ? [seed, ...selected.filter((track) => recordingKey(track) !== recordingKey(seed))]
     : selected
-  playMusic(session, tracks, { kind: 'radio', title, id: crypto.randomUUID(), radio })
+  playMusic(session, tracks, { kind: 'radio', title, id: randomId(), radio })
   session.dispatch({ type: 'setRepeat', repeat: false })
 }
 

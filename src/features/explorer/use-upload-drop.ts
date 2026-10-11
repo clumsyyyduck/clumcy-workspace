@@ -35,6 +35,10 @@ export function useUploadDrop(options: {
 
   const uploadMutation = useMutation(() => ({
     mutationFn: async ({ files, targetDir }: { files: File[]; targetDir: string }) => {
+      if (window.derpDesktop) {
+        await window.derpDesktop.importDrop(files, targetDir)
+        return
+      }
       const formData = new FormData()
       formData.append('targetDir', targetDir)
       for (const file of files) formData.append('files', file, file.name)
@@ -54,7 +58,7 @@ export function useUploadDrop(options: {
     clearToastTimer()
     setToast({ kind: 'uploading', fileCount: files.length })
     try {
-      await uploadMutation.mutateAsync({ files, targetDir })
+      await uploadMutation.mutate({ files, targetDir })
       setToast({ kind: 'success' })
       toastTimer = window.setTimeout(hideToast, 2000)
     } catch (error) {
@@ -93,7 +97,9 @@ export function useUploadDrop(options: {
     dragDepth = 0
     setDragOver(false)
     if (!options.editable() || !event.dataTransfer?.files.length) return
-    const files = await collectDroppedUploadFiles(event.dataTransfer)
+    const files = window.derpDesktop
+      ? Array.from(event.dataTransfer.files)
+      : await collectDroppedUploadFiles(event.dataTransfer)
     if (files.length) void upload(files)
   }
 

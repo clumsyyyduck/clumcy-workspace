@@ -1,3 +1,4 @@
+import { runDesktopOperation } from '@/desktop/operations'
 import type { JSX } from '@solidjs/web'
 import type { Accessor } from 'solid-js'
 import { Show, createEffect, createSignal } from 'solid-js'
@@ -82,7 +83,10 @@ type FileBrowserViewListing = Readonly<{
 
 type FileBrowserViewHost = Readonly<{
   openParent: () => void
-  openFile: (file: FileItem) => void
+  openFile: (file: FileItem, event?: MouseEvent | KeyboardEvent) => void
+  activateFile?: (file: FileItem) => void
+  selected?: (file: FileItem) => boolean
+  selectionKeyDown?: (event: KeyboardEvent) => void
   setViewMode: (mode: 'list' | 'grid') => void
   navigateBreadcrumb: (path: string) => void
   openBreadcrumbMenu?: (
@@ -321,11 +325,13 @@ export function FileBrowserView(props: FileBrowserViewProps) {
   }
 
   function fileAttributes<Element extends HTMLElement>(file: FileItem, kind: 'grid' | 'list') {
-    const dragGrid = kind === 'grid' && isWorkspace()
+    const dragGrid = kind === 'grid' && (isWorkspace() || !!window.derpDesktop)
     const highlightGrid = isWorkspace() && kind === 'grid'
     return {
       ...(isWorkspace() ? { 'data-no-window-drag': '' } : {}),
+      'aria-selected': props.host.selected?.(file),
       class: cn(
+        props.host.selected?.(file) ? 'bg-accent text-accent-foreground' : '',
         props.rows.iconContext().playingPath === file.path ? 'bg-primary/10' : '',
         highlightGrid && file.isDirectory && props.controller.drag.dragOverPath() === file.path
           ? 'bg-primary/20'
@@ -338,6 +344,26 @@ export function FileBrowserView(props: FileBrowserViewProps) {
             ? 'true'
             : 'false'
           : undefined,
+      tabindex: window.derpDesktop ? 0 : undefined,
+      onKeyDown: (event: KeyboardEvent) => {
+        props.host.selectionKeyDown?.(event)
+        if (event.defaultPrevented) return
+        if (props.host.activateFile && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          if (event.key === 'Enter') props.host.activateFile(file)
+          else props.host.openFile(file, event)
+          return
+        }
+        if (
+          window.derpDesktop &&
+          event.ctrlKey &&
+          event.key.toLowerCase() === 'c' &&
+          !file.isVirtual
+        ) {
+          event.preventDefault()
+          runDesktopOperation(window.derpDesktop.copy([file.path]))
+        }
+      },
       onPointerEnter: () => props.rows.onFilePointerEnter?.(file),
       onContextMenu: (event: MouseEvent) => {
         setDirectoryBackgroundMenu(null)
@@ -350,19 +376,19 @@ export function FileBrowserView(props: FileBrowserViewProps) {
           : undefined,
       onDragEnd: dragGrid || kind === 'list' ? onFileDragEnd : undefined,
       onDragOver:
-        (dragGrid || kind === 'list') && canMoveFile()
+        (dragGrid || kind === 'list') && (canMoveFile() || !!window.derpDesktop)
           ? (event: globalThis.DragEvent) => {
               if (file.isDirectory) onFolderDragOver(file, event)
             }
           : undefined,
       onDragLeave:
-        (dragGrid || kind === 'list') && canMoveFile()
+        (dragGrid || kind === 'list') && (canMoveFile() || !!window.derpDesktop)
           ? (event: globalThis.DragEvent) => {
               if (file.isDirectory) onFolderDragLeave(file, event)
             }
           : undefined,
       onDrop:
-        (dragGrid || kind === 'list') && canMoveFile()
+        (dragGrid || kind === 'list') && (canMoveFile() || !!window.derpDesktop)
           ? (event: globalThis.DragEvent) => {
               if (file.isDirectory) onFolderDrop(file, event)
             }
@@ -408,6 +434,7 @@ export function FileBrowserView(props: FileBrowserViewProps) {
               rows={{
                 onParentClick: props.host.openParent,
                 onFileClick: props.host.openFile,
+                onFileActivate: props.host.activateFile,
                 parentGridAttributes: () => parentAttributes<HTMLDivElement>('grid'),
                 parentRowAttributes: () => parentAttributes<HTMLTableRowElement>('list'),
                 fileGridAttributes: (file) => fileAttributes<HTMLDivElement>(file, 'grid'),
@@ -431,6 +458,7 @@ export function FileBrowserView(props: FileBrowserViewProps) {
         results={props.controller.search.results()}
         query={props.controller.search.debouncedQuery()}
         isLoading={props.controller.search.loading()}
+        error={props.controller.search.error()}
         currentPath={props.controller.currentPath()}
         onResultClick={(path) =>
           props.host.openKnowledgeBaseResult(
