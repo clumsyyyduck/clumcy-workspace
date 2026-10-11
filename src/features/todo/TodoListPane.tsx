@@ -272,7 +272,7 @@ export function TodoListPane(props: TodoListPaneProps): JSX.Element {
         </div>
       </Show>
 
-      <div class='min-h-0 flex-1 overflow-y-auto'>
+      <div class='min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]'>
         <div class='mx-auto w-full max-w-2xl px-5 pt-8 pb-16 sm:px-8'>
           <header class='mb-6 flex items-end justify-between gap-4 px-3'>
             <div class='min-w-0'>

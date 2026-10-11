@@ -219,20 +219,18 @@ export function TodoTaskRow(props: Props) {
 
       <Show when={props.expanded}>
         <div class='mt-3 space-y-4 pl-8'>
-          <textarea
-            aria-label='Notes'
-            rows={2}
+          <WrappingTextInput
+            multiline
+            label='Notes'
             placeholder='Notes'
-            class='field-sizing-content min-h-12 w-full resize-none rounded-lg bg-muted/50 px-3 py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 outline-none focus:bg-muted/70'
+            class='min-h-12 rounded-lg bg-muted/50 px-3 py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:bg-muted/70'
             value={props.task.description ?? ''}
             readonly={!props.editable}
-            onKeyDown={stopNavigationKeys}
-            onInput={(event) => {
-              const description = event.currentTarget.value
+            onInput={(description) =>
               props.onChange((task) => {
                 task.description = description
               })
-            }}
+            }
           />
 
           <div class='flex flex-wrap items-center gap-2'>

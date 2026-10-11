@@ -206,4 +206,37 @@ test.describe('Todo lists', () => {
     await page.mouse.click(viewport.width - 24, viewport.height - 24)
     await expect(calendar).toBeHidden()
   })
+
+  test('expanding a task with notes does not shift the list sideways', async ({ page }) => {
+    const path = `${FOLDER}/no-jump.todo.json`
+    const tasks = Array.from({ length: 6 }, (_, index) => ({
+      id: `t${index}`,
+      title: `Task ${index}`,
+      done: false,
+      description: index === 0 ? ['One', 'Two', 'Three', 'Four', 'Five'].join('\n') : undefined,
+      checklist: index === 0 ? ['One', 'Two', 'Three'] : undefined,
+    }))
+    await putFile(page.request, path, JSON.stringify({ version: 1, tasks }))
+    await page.setViewportSize({ width: 900, height: 520 })
+    await page.goto(`/?dir=${encodeURIComponent(FOLDER)}&viewing=${encodeURIComponent(path)}`)
+
+    const heading = page.getByTestId('todo-list').getByRole('heading')
+    await expect(heading).toBeVisible()
+    const before = (await heading.boundingBox())!.x
+    await page.getByRole('button', { name: 'Show details' }).first().click({ force: true })
+
+    const notes = page.getByRole('textbox', { name: 'Notes' })
+    await expect(notes).toBeVisible()
+    expect((await heading.boundingBox())!.x).toBe(before)
+    // Headless Chromium hides scrollbars, so assert the gutter that prevents the shift.
+    const gutter = await heading.evaluate((element) => {
+      let node: Element | null = element
+      while (node && getComputedStyle(node).overflowY !== 'auto') node = node.parentElement
+      return node ? getComputedStyle(node).scrollbarGutter : null
+    })
+    expect(gutter).toBe('stable')
+    await expect
+      .poll(() => notes.evaluate((field) => field.scrollHeight <= field.clientHeight + 1))
+      .toBe(true)
+  })
 })

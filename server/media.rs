@@ -260,6 +260,7 @@ pub fn list(config: &Config, input: &str) -> AppResult<Vec<FileItem>> {
     };
     if logical.is_empty()
         && let Some(folder) = &config.todo_folder
+        && folder.contains('/')
     {
         items.push(FileItem {
             path: folder.clone(),

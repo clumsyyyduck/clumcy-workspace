@@ -10,6 +10,8 @@ type Props = {
   class?: string
   placeholder?: string
   readonly?: boolean
+  /** Allows line breaks, e.g. for notes. */
+  multiline?: boolean
   onInput: (value: string) => void
   onBlur?: (value: string) => void
   onEnter?: (value: string) => void
@@ -26,7 +28,7 @@ const NAVIGATION_KEYS = [
   'PageDown',
 ]
 
-/** Single-line text field whose text wraps onto new lines instead of being cut off. */
+/** Text field that grows with its content instead of scrolling or cutting text off. */
 export function WrappingTextInput(props: Props) {
   const [element, setElement] = createSignal<HTMLTextAreaElement | null>(null)
 
@@ -54,7 +56,7 @@ export function WrappingTextInput(props: Props) {
   return (
     <textarea
       ref={setElement}
-      rows={1}
+      rows={props.multiline ? 2 : 1}
       aria-label={props.label}
       placeholder={props.placeholder}
       spellcheck={false}
@@ -66,14 +68,14 @@ export function WrappingTextInput(props: Props) {
       readonly={props.readonly}
       onKeyDown={(event) => {
         if (NAVIGATION_KEYS.includes(event.key)) event.stopPropagation()
-        if (event.key !== 'Enter') return
+        if (event.key !== 'Enter' || props.multiline) return
         event.preventDefault()
         if (props.onEnter) props.onEnter(event.currentTarget.value)
         else event.currentTarget.blur()
       }}
       onInput={(event) => {
         const textarea = event.currentTarget
-        const value = textarea.value.replace(/\s*\r?\n\s*/g, ' ')
+        const value = props.multiline ? textarea.value : textarea.value.replace(/\s*\r?\n\s*/g, ' ')
         if (value !== textarea.value) textarea.value = value
         props.onInput(value)
       }}

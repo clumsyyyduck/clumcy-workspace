@@ -185,7 +185,7 @@ function renderFileIcon(
 
   if (
     (type === MediaType.TEXT && isTodoPath(fp)) ||
-    (isVirtual && type === MediaType.FOLDER && fp.split('/').at(-1) === 'TODO')
+    (type === MediaType.FOLDER && (fp === 'TODO' || (isVirtual && fp.split('/').at(-1) === 'TODO')))
   ) {
     return <ListTodo class={`${cls} text-blue-500`} size={sz} stroke-width={sw} />
   }
