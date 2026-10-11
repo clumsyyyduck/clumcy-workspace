@@ -42,6 +42,7 @@ export function handleAdminEvent(
     handlers.invalidate(queryKeys.files())
     handlers.invalidate(queryKeys.adminContent())
     handlers.invalidate(queryKeys.todo())
+    handlers.invalidate(queryKeys.goals())
     handlers.invalidate(['video-info'])
     handlers.invalidate(['video-subtitles'])
     if (pathMutation) {

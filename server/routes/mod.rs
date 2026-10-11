@@ -1,6 +1,7 @@
 pub mod config;
 pub mod desktop;
 pub mod files;
+pub mod goals;
 pub mod hermes_chat;
 pub mod media;
 pub mod reader_state;

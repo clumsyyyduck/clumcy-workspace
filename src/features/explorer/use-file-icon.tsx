@@ -31,10 +31,12 @@ import type { JSX } from '@solidjs/web'
 import type { TaskbarPin } from '@/lib/models/taskbar-pins'
 import { virtualAppearanceForPath, type VirtualAppearance } from './virtual-directory-appearance'
 import { isTodoPath } from '@/features/todo/todo-model'
+import { isGoalPath, isGoalsBoardPath } from '@/features/goals/goal-model'
 import Archive from 'lucide-solid/icons/archive'
 import Bot from 'lucide-solid/icons/bot'
 import FolderKanban from 'lucide-solid/icons/folder-kanban'
 import ListTodo from 'lucide-solid/icons/list-todo'
+import Target from 'lucide-solid/icons/target'
 import MessageSquare from 'lucide-solid/icons/message-square'
 
 export type FileIconContext = {
@@ -189,6 +191,10 @@ function renderFileIcon(
 
   if (!isVirtual && type === MediaType.FOLDER && knowledgeBases.some((kb) => norm(kb) === fp)) {
     return <BookOpen class={`${cls} text-primary`} size={sz} stroke-width={sw} />
+  }
+
+  if (isGoalPath(fp) || isGoalsBoardPath(fp)) {
+    return <Target class={`${cls} text-rose-500`} size={sz} stroke-width={sw} />
   }
 
   if (

@@ -195,7 +195,13 @@ export function FileBrowserView(props: FileBrowserViewProps) {
       >
         <Ellipsis class='h-5 w-5' aria-hidden='true' />
       </button>
-      <Show when={!file.isDirectory && props.controller.displaySettings.fileColumns().favorite}>
+      <Show
+        when={
+          !file.isDirectory &&
+          !file.isVirtual &&
+          props.controller.displaySettings.fileColumns().favorite
+        }
+      >
         <div class='absolute top-1.5 left-1.5 z-10'>{favoriteButton(file)}</div>
       </Show>
       <Show when={!file.isDirectory && props.controller.displaySettings.fileColumns().views}>
@@ -245,7 +251,13 @@ export function FileBrowserView(props: FileBrowserViewProps) {
 
   const renderListName = (file: FileItem) => (
     <div class='flex min-w-0 items-center gap-2'>
-      <Show when={!file.isDirectory && props.controller.displaySettings.fileColumns().favorite}>
+      <Show
+        when={
+          !file.isDirectory &&
+          !file.isVirtual &&
+          props.controller.displaySettings.fileColumns().favorite
+        }
+      >
         {favoriteButton(file)}
       </Show>
       <div class='min-w-0 flex-1'>

@@ -81,6 +81,7 @@ export const BATCHES = [
       'text-editor',
       'knowledge-base',
       'todo-list',
+      'goals',
       'drag-drop',
       'mobile-media-management',
     ],

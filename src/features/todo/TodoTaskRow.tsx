@@ -2,17 +2,17 @@ import AlignLeft from 'lucide-solid/icons/align-left'
 import BellRing from 'lucide-solid/icons/bell-ring'
 import Bell from 'lucide-solid/icons/bell'
 import CalendarClock from 'lucide-solid/icons/calendar-clock'
-import Check from 'lucide-solid/icons/check'
 import Info from 'lucide-solid/icons/info'
 import ListChecks from 'lucide-solid/icons/list-checks'
-import Plus from 'lucide-solid/icons/plus'
 import Trash2 from 'lucide-solid/icons/trash-2'
-import X from 'lucide-solid/icons/x'
-import { For, Show, createMemo, createSignal } from 'solid-js'
+import { Show, createMemo, createSignal } from 'solid-js'
 import { cn } from '@/lib/ui/cn'
 import { TodoCalendarPopover } from './TodoCalendar'
+import { ChecklistEditor } from './ChecklistEditor'
+import { TodoCheck } from './TodoCheck'
+import { NotesField } from './NotesField'
 import { WrappingTextInput } from './WrappingTextInput'
-import { formatDue, newTodoId, parseDue, reminderActive, type TodoTask } from './todo-model'
+import { formatDue, parseDue, reminderActive, type TodoTask } from './todo-model'
 
 type Props = {
   task: TodoTask
@@ -24,63 +24,7 @@ type Props = {
   onDelete: () => void
 }
 
-function stopNavigationKeys(event: KeyboardEvent) {
-  if (
-    [
-      'ArrowLeft',
-      'ArrowRight',
-      'ArrowUp',
-      'ArrowDown',
-      'Home',
-      'End',
-      'PageUp',
-      'PageDown',
-    ].includes(event.key)
-  )
-    event.stopPropagation()
-}
-
-export function TodoCheck(props: {
-  checked: boolean
-  disabled?: boolean
-  size?: 'md' | 'sm'
-  class?: string
-  label: string
-  onToggle: () => void
-}) {
-  return (
-    <button
-      type='button'
-      role='checkbox'
-      aria-checked={props.checked ? 'true' : 'false'}
-      aria-label={props.label}
-      disabled={props.disabled}
-      class={cn(
-        props.class,
-        'inline-flex shrink-0 items-center justify-center border-[1.5px] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:cursor-default',
-        props.size === 'sm' ? 'size-4 rounded-[5px]' : 'size-5 rounded-full',
-        props.checked
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-muted-foreground/35 hover:border-primary/70',
-      )}
-      onClick={(event) => {
-        event.stopPropagation()
-        props.onToggle()
-      }}
-    >
-      <Show when={props.checked}>
-        <Check
-          class={props.size === 'sm' ? 'size-2.5' : 'size-3'}
-          stroke-width={3}
-          aria-hidden='true'
-        />
-      </Show>
-    </button>
-  )
-}
-
 export function TodoTaskRow(props: Props) {
-  const [newItem, setNewItem] = createSignal('')
   const [calendarOpen, setCalendarOpen] = createSignal(false)
   const [dateButton, setDateButton] = createSignal<HTMLButtonElement | null>(null)
 
@@ -94,15 +38,6 @@ export function TodoTaskRow(props: Props) {
   const hasMeta = createMemo(
     () => Boolean(props.task.due) || checklist().length > 0 || Boolean(props.task.description),
   )
-
-  function addChecklistItem() {
-    const text = newItem().trim()
-    if (!text) return
-    props.onChange((task) => {
-      task.checklist = [...(task.checklist ?? []), { id: newTodoId(), text, done: false }]
-    })
-    setNewItem('')
-  }
 
   return (
     <div
@@ -219,8 +154,7 @@ export function TodoTaskRow(props: Props) {
 
       <Show when={props.expanded}>
         <div class='mt-3 space-y-4 pl-8'>
-          <WrappingTextInput
-            multiline
+          <NotesField
             label='Notes'
             placeholder='Notes'
             class='min-h-12 rounded-lg bg-muted/50 px-3 py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:bg-muted/70'
@@ -297,76 +231,11 @@ export function TodoTaskRow(props: Props) {
             />
           </Show>
 
-          <div class='space-y-1'>
-            <div class='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              Checklist
-            </div>
-            <For each={checklist()}>
-              {(item) => (
-                <div class='group/item flex items-start gap-2.5 rounded-md py-1'>
-                  <TodoCheck
-                    class='mt-0.5'
-                    size='sm'
-                    checked={item.done}
-                    disabled={!props.editable}
-                    label={item.done ? 'Mark item as not done' : 'Mark item as done'}
-                    onToggle={() =>
-                      props.onChange((task) => {
-                        const target = task.checklist?.find((entry) => entry.id === item.id)
-                        if (target) target.done = !target.done
-                      })
-                    }
-                  />
-                  <WrappingTextInput
-                    label='Checklist item'
-                    class={cn(
-                      'min-w-0 flex-1 text-sm leading-5',
-                      item.done && 'text-muted-foreground line-through',
-                    )}
-                    value={item.text}
-                    readonly={!props.editable}
-                    onInput={(text) =>
-                      props.onChange((task) => {
-                        const target = task.checklist?.find((entry) => entry.id === item.id)
-                        if (target) target.text = text
-                      })
-                    }
-                  />
-                  <Show when={props.editable}>
-                    <button
-                      type='button'
-                      aria-label='Remove item'
-                      class='inline-flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover/item:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100'
-                      onClick={() =>
-                        props.onChange((task) => {
-                          task.checklist = task.checklist?.filter((entry) => entry.id !== item.id)
-                        })
-                      }
-                    >
-                      <X class='size-3' stroke-width={2} aria-hidden='true' />
-                    </button>
-                  </Show>
-                </div>
-              )}
-            </For>
-            <Show when={props.editable}>
-              <div class='flex items-center gap-2.5 py-1'>
-                <Plus class='size-4 text-muted-foreground' stroke-width={2} aria-hidden='true' />
-                <input
-                  aria-label='New checklist item'
-                  placeholder='Add item'
-                  class='min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/70'
-                  value={newItem()}
-                  onInput={(event) => setNewItem(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    stopNavigationKeys(event)
-                    if (event.key === 'Enter') addChecklistItem()
-                  }}
-                  onBlur={addChecklistItem}
-                />
-              </div>
-            </Show>
-          </div>
+          <ChecklistEditor
+            items={checklist()}
+            editable={props.editable}
+            onChange={props.onChange}
+          />
 
           <Show when={props.editable}>
             <div class='flex justify-end'>

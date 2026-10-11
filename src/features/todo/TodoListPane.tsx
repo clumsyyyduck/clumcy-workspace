@@ -1,31 +1,14 @@
-import { useQuery, useQueryClient } from '@tanstack/solid-query'
 import AlertCircle from 'lucide-solid/icons/alert-circle'
 import BellRing from 'lucide-solid/icons/bell-ring'
 import ChevronRight from 'lucide-solid/icons/chevron-right'
 import Plus from 'lucide-solid/icons/plus'
 import X from 'lucide-solid/icons/x'
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  createStore,
-  onSettled,
-  reconcile,
-  snapshot,
-  untrack,
-} from 'solid-js'
+import { For, Show, createMemo, createSignal, onSettled } from 'solid-js'
 import type { JSX } from '@solidjs/web'
-import { api, isApiError, post } from '@/lib/api/client'
 import { queryKeys } from '@/lib/api/query-keys'
 import { closeViewer } from '@/lib/browser/url-state-actions'
 import { isPathEditable } from '@/lib/files/path-utils'
 import { cn } from '@/lib/ui/cn'
-import {
-  enqueueTextDocumentSave,
-  createTextDocumentTarget,
-} from '@/features/viewer/text-document-target'
 import {
   mergeTodoDocuments,
   newTodoId,
@@ -37,8 +20,7 @@ import {
   type TodoTask,
 } from './todo-model'
 import { TodoTaskRow } from './TodoTaskRow'
-
-type TextDocumentRemote = { content: string; version: string }
+import { useSyncedDocument } from './use-synced-document'
 
 export type TodoListPaneProps = {
   viewingPath: string
@@ -48,156 +30,32 @@ export type TodoListPaneProps = {
   onClose?: () => void
 }
 
-const SAVE_DELAY_MS = 400
 const CLOCK_TICK_MS = 30_000
 
-function fetchTextDocument(path: string) {
-  return api<TextDocumentRemote>(`/api/files/text?path=${encodeURIComponent(path)}`)
-}
-
-function plainDocument(document: TodoDocument): TodoDocument {
-  return JSON.parse(JSON.stringify(snapshot(document))) as TodoDocument
-}
-
 export function TodoListPane(props: TodoListPaneProps): JSX.Element {
-  const queryClient = useQueryClient()
-  const queryKey = createMemo(() => queryKeys.textContent(props.viewingPath))
-
-  const textQuery = useQuery(() => ({
-    queryKey: queryKey(),
-    queryFn: () => fetchTextDocument(props.viewingPath),
-  }))
-
   const editable = createMemo(() => isPathEditable(props.viewingPath, props.editableFolders))
   const listName = createMemo(() => todoListName(props.viewingPath))
 
-  const [document, setDocument] = createStore<TodoDocument>({ version: 1, tasks: [] })
-  const [hydrated, setHydrated] = createSignal(false)
-  const [parseError, setParseError] = createSignal<string | null>(null)
-  const [saveError, setSaveError] = createSignal<string | null>(null)
+  const synced = useSyncedDocument<TodoDocument>({
+    path: () => props.viewingPath,
+    editable,
+    initial: { version: 1, tasks: [] },
+    parse: parseTodoDocument,
+    serialize: serializeTodoDocument,
+    merge: mergeTodoDocuments,
+    invalidate: [queryKeys.todo()],
+  })
+  const { document, hydrated, parseError, saveError, update, flush } = synced
+
   const [newTitle, setNewTitle] = createSignal('')
   const [expandedId, setExpandedId] = createSignal<string | null>(null)
   const [showCompleted, setShowCompleted] = createSignal(false)
   const [now, setNow] = createSignal(Date.now())
 
-  let base: TodoDocument | null = null
-  let baseVersion = ''
-  let saveTimer: ReturnType<typeof setTimeout> | null = null
-  let saving = false
-  let saveAgain = false
-
-  const hasLocalChanges = () =>
-    base !== null && serializeTodoDocument(plainDocument(document)) !== serializeTodoDocument(base)
-
-  createEffect(
-    () =>
-      textQuery.isPending || textQuery.isError
-        ? undefined
-        : { content: textQuery.data.content, version: textQuery.data.version },
-    (remote) => {
-      if (!remote) return
-      if (untrack(() => hydrated() && (saving || saveTimer !== null || hasLocalChanges()))) return
-      try {
-        const parsed = parseTodoDocument(remote.content)
-        base = parsed
-        baseVersion = remote.version
-        setDocument(reconcile(parsed, 'id'))
-        setParseError(null)
-        setHydrated(true)
-      } catch (error) {
-        setParseError(error instanceof Error ? error.message : 'Invalid todo list')
-      }
-    },
-  )
-
   onSettled(() => {
     const timer = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS)
-    const warnIfDirty = (event: BeforeUnloadEvent) => {
-      if (!saving && saveTimer === null) return
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', warnIfDirty)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('beforeunload', warnIfDirty)
-      if (saveTimer !== null) {
-        clearTimeout(saveTimer)
-        saveTimer = null
-        void flush()
-      }
-    }
+    return () => window.clearInterval(timer)
   })
-
-  async function writeOnce(path: string) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const local = plainDocument(document)
-      const content = serializeTodoDocument(local)
-      if (base && content === serializeTodoDocument(base)) return
-      try {
-        const result = await post<{ version: string }>('/api/files/edit', {
-          path,
-          content,
-          expectedHash: baseVersion,
-        })
-        base = local
-        baseVersion = result.version
-        queryClient.setQueryData(queryKeys.textContent(path), { content, version: result.version })
-        return
-      } catch (error) {
-        if (!isApiError(error) || error.status !== 409) throw error
-        const remote = await fetchTextDocument(path)
-        const remoteDocument = parseTodoDocument(remote.content)
-        const merged = mergeTodoDocuments(base ?? remoteDocument, local, remoteDocument)
-        base = remoteDocument
-        baseVersion = remote.version
-        setDocument(reconcile(merged, 'id'))
-      }
-    }
-    throw new Error('The list keeps changing elsewhere. Try again.')
-  }
-
-  async function flush() {
-    if (saveTimer !== null) {
-      clearTimeout(saveTimer)
-      saveTimer = null
-    }
-    if (saving) {
-      saveAgain = true
-      return
-    }
-    saving = true
-    const path = props.viewingPath
-    try {
-      await enqueueTextDocumentSave(createTextDocumentTarget(path), () => writeOnce(path))
-      setSaveError(null)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.todo() })
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save')
-    } finally {
-      saving = false
-      if (saveAgain) {
-        saveAgain = false
-        void flush()
-      }
-    }
-  }
-
-  function scheduleSave() {
-    if (saveTimer !== null) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      saveTimer = null
-      void flush()
-    }, SAVE_DELAY_MS)
-  }
-
-  function update(mutate: (draft: TodoDocument) => void) {
-    if (!editable() || !hydrated()) return
-    setDocument((draft) => {
-      mutate(draft)
-    })
-    scheduleSave()
-  }
 
   function updateTask(id: string, mutate: (task: TodoTask) => void) {
     update((draft) => {
@@ -228,7 +86,7 @@ export function TodoListPane(props: TodoListPaneProps): JSX.Element {
   }
 
   async function handleClose() {
-    if (saveTimer !== null || saving) await flush()
+    if (synced.pending()) await flush()
     if (props.onClose) props.onClose()
     else closeViewer()
   }
@@ -318,7 +176,7 @@ export function TodoListPane(props: TodoListPaneProps): JSX.Element {
             </button>
           </Show>
 
-          <Show when={textQuery.isError}>
+          <Show when={synced.loadFailed()}>
             <p class='px-3 text-sm text-red-500'>Failed to load the list.</p>
           </Show>
 

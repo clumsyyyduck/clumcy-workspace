@@ -682,6 +682,7 @@ mod tests {
                 hermes: None,
                 music: crate::config::MusicConfig::default(),
                 todo_folder: None,
+                goals_folder: None,
                 media_ai: crate::config::MediaAiConfig {
                     enabled: true,
                     paused: true,

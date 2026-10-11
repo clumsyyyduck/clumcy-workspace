@@ -19,4 +19,5 @@ export const queryKeys = {
   fileSearchStatus: () => ['file-search-status'] as const,
   todo: () => ['todo'] as const,
   todoReminders: () => ['todo', 'reminders'] as const,
+  goals: () => ['goals'] as const,
 } as const

@@ -84,6 +84,7 @@ fn router(state: Shared) -> Router {
         .merge(routes::search::router())
         .merge(routes::stats::router())
         .merge(routes::todo::router())
+        .merge(routes::goals::router())
         .merge(routes::workspaces::router())
         .merge(routes::media::router())
         .merge(crate::video_playback::router())
@@ -99,7 +100,8 @@ pub(crate) async fn run() {
     let config = Config::load().unwrap_or_else(|error| panic!("Failed to load config: {error}"));
     state_db::initialize(&config)
         .unwrap_or_else(|error| panic!("Failed to initialize app database: {error}"));
-    routes::todo::ensure_folder(&config);
+    routes::todo::ensure_folder(config.todo_folder.as_deref(), &config);
+    routes::todo::ensure_folder(config.goals_folder.as_deref(), &config);
     let dev = std::env::var("NODE_ENV").unwrap_or_default() != "production"
         && !std::env::args().any(|argument| argument == "--production");
     let vite_port = vite_port(config.port);

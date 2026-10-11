@@ -67,10 +67,10 @@ export function hasVirtualCapability(
 }
 
 export function virtualFileSizeVisible(
-  file: Pick<FileItem, 'isDirectory'>,
+  file: Pick<FileItem, 'isDirectory' | 'isVirtual'>,
   entry?: VirtualEntry,
 ): boolean {
-  return !file.isDirectory && !entry
+  return !file.isDirectory && !file.isVirtual && !entry
 }
 
 export function virtualEntrySubtitle(entry?: VirtualEntry): string {

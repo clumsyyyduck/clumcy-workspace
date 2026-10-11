@@ -267,6 +267,17 @@ pub fn list(config: &Config, input: &str) -> AppResult<Vec<FileItem>> {
             ..virtual_item("TODO")
         });
     }
+    if logical.is_empty()
+        && let Some(folder) = &config.goals_folder
+    {
+        items.push(FileItem {
+            path: format!("{folder}/{}", crate::routes::goals::BOARD_NAME),
+            media_type: "other".into(),
+            extension: crate::routes::goals::BOARD_EXTENSION.into(),
+            is_directory: false,
+            ..virtual_item("Goals")
+        });
+    }
     let roots = &config.roots;
     if roots.len() > 1 && logical.is_empty() {
         for r in roots {
@@ -309,6 +320,9 @@ pub fn list(config: &Config, input: &str) -> AppResult<Vec<FileItem>> {
         } else {
             rel
         };
+        if logical.is_empty() && meta.is_dir() && config.goals_folder.as_deref() == Some(&path) {
+            continue;
+        }
         let ext = extension(Path::new(&name));
         let version = meta
             .modified()

@@ -1,20 +1,16 @@
 import ChevronLeft from 'lucide-solid/icons/chevron-left'
 import ChevronRight from 'lucide-solid/icons/chevron-right'
 import Clock from 'lucide-solid/icons/clock'
-import { For, createEffect, createMemo, createSignal, untrack, type Accessor } from 'solid-js'
-import { Portal } from '@solidjs/web'
-import { clampFixedMenuPosition } from '@/lib/ui/clamp-fixed-menu'
+import { For, Show, createMemo, createSignal, untrack, type Accessor } from 'solid-js'
+import { AnchoredPopover } from '@/lib/ui/AnchoredPopover'
 import { cn } from '@/lib/ui/cn'
-import {
-  floatingPointerInsideSurface,
-  registerFloatingDismissLayer,
-} from '@/lib/ui/floating-layer-registry'
-import { FLOATING_Z_PLAYBACK_MENU } from '@/lib/ui/floating-z-index'
-import { calendarDays, composeDue, dueTime, parseDue, sameDay } from './todo-model'
+import { calendarDays, composeDue, dayKey, dueTime, parseDue, sameDay } from './todo-model'
 
 type Props = {
   value: string | undefined
   now: number
+  /** Without time the value is a plain `YYYY-MM-DD` day. */
+  withTime?: boolean
   onChange: (due: string | undefined) => void
   onDone: () => void
 }
@@ -59,7 +55,7 @@ export function TodoCalendar(props: Props) {
   const time = createMemo(() => dueTime(props.value))
 
   function pick(day: Date) {
-    props.onChange(composeDue(day, time()))
+    props.onChange(props.withTime === false ? dayKey(day) : composeDue(day, time()))
     if (day.getMonth() !== month().getMonth()) setMonth(startOfMonth(day))
   }
 
@@ -165,20 +161,22 @@ export function TodoCalendar(props: Props) {
         <button type='button' class={chipClass} onClick={() => pick(addDays(today(), 1))}>
           {capitalize(relativeDay.format(1, 'day'))}
         </button>
-        <label class='ml-auto inline-flex h-6 items-center gap-1 rounded-full bg-muted/60 pr-1.5 pl-2 text-[11px]'>
-          <Clock class='size-3 text-muted-foreground' stroke-width={2} aria-hidden='true' />
-          <input
-            type='time'
-            aria-label='Start time'
-            class='bg-transparent text-[11px] font-medium text-foreground tabular-nums outline-none [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden'
-            value={time()}
-            onChange={(event) => {
-              const value = event.currentTarget.value
-              if (!value) return
-              props.onChange(composeDue(selected() ?? today(), value))
-            }}
-          />
-        </label>
+        <Show when={props.withTime !== false}>
+          <label class='ml-auto inline-flex h-6 items-center gap-1 rounded-full bg-muted/60 pr-1.5 pl-2 text-[11px]'>
+            <Clock class='size-3 text-muted-foreground' stroke-width={2} aria-hidden='true' />
+            <input
+              type='time'
+              aria-label='Start time'
+              class='bg-transparent text-[11px] font-medium text-foreground tabular-nums outline-none [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden'
+              value={time()}
+              onChange={(event) => {
+                const value = event.currentTarget.value
+                if (!value) return
+                props.onChange(composeDue(selected() ?? today(), value))
+              }}
+            />
+          </label>
+        </Show>
       </div>
 
       <div class='mt-1.5 flex items-center justify-between'>
@@ -202,80 +200,16 @@ export function TodoCalendar(props: Props) {
   )
 }
 
-const ANCHOR_GAP = 6
-
-/**
- * Floats the calendar over the page next to its trigger: below it when there is room on
- * screen, otherwise above, always kept clear of the viewport edges.
- */
 export function TodoCalendarPopover(props: Props & { anchor: Accessor<HTMLElement | null> }) {
-  const [surface, setSurface] = createSignal<HTMLDivElement | null>(null)
-
-  createEffect(
-    () => ({ element: surface(), anchor: props.anchor() }),
-    ({ element, anchor }) => {
-      if (!element || !anchor) return undefined
-      const place = () => {
-        const anchorRect = anchor.getBoundingClientRect()
-        const rect = element.getBoundingClientRect()
-        const next = clampFixedMenuPosition({
-          preferredLeft: anchorRect.left,
-          width: rect.width,
-          height: rect.height,
-          flip: { anchorTop: anchorRect.top, anchorBottom: anchorRect.bottom, gap: ANCHOR_GAP },
-        })
-        element.style.left = `${next.left}px`
-        element.style.top = `${next.top}px`
-        element.style.visibility = 'visible'
-      }
-      place()
-      const schedule = () => requestAnimationFrame(place)
-      const observer = new ResizeObserver(schedule)
-      observer.observe(element)
-      observer.observe(anchor)
-      window.addEventListener('resize', schedule)
-      window.addEventListener('scroll', schedule, true)
-      return () => {
-        observer.disconnect()
-        window.removeEventListener('resize', schedule)
-        window.removeEventListener('scroll', schedule, true)
-      }
-    },
-  )
-
-  createEffect(
-    () => surface(),
-    (element) => {
-      if (!element) return undefined
-      return registerFloatingDismissLayer({
-        zIndex: FLOATING_Z_PLAYBACK_MENU,
-        isInside: (event) =>
-          floatingPointerInsideSurface(event, element, [props.anchor()], undefined, undefined),
-        dismiss: () => props.onDone(),
-      })
-    },
-  )
-
   return (
-    <Portal mount={document.body}>
-      <div
-        ref={setSurface}
-        data-no-window-drag
-        class='fixed'
-        style={{
-          left: '0px',
-          top: '0px',
-          visibility: 'hidden',
-          'z-index': FLOATING_Z_PLAYBACK_MENU,
-        }}
-      >
-        <TodoCalendar
-          value={props.value}
-          now={props.now}
-          onChange={props.onChange}
-          onDone={props.onDone}
-        />
-      </div>
-    </Portal>
+    <AnchoredPopover anchor={props.anchor} onDismiss={props.onDone}>
+      <TodoCalendar
+        value={props.value}
+        now={props.now}
+        withTime={props.withTime}
+        onChange={props.onChange}
+        onDone={props.onDone}
+      />
+    </AnchoredPopover>
   )
 }

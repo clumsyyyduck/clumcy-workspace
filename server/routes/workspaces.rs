@@ -410,6 +410,7 @@ mod tests {
             hermes: None,
             music: crate::config::MusicConfig::default(),
             todo_folder: None,
+            goals_folder: None,
             media_ai: Default::default(),
         };
         state_db::initialize(&config).unwrap();

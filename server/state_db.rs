@@ -498,6 +498,7 @@ mod tests {
             media_ai: Default::default(),
             music: Default::default(),
             todo_folder: None,
+            goals_folder: None,
         }
     }
 

@@ -230,6 +230,24 @@ curl -X POST http://localhost:3000/api/todo/tasks -H 'Content-Type: application/
 
 `GET /api/todo/lists` lists the existing lists.
 
+### Goals
+
+Each `*.goal.json` file in the goals folder is one big goal with a description, a checklist
+and subgoals. A subgoal is **General** (a one-off step), **Daily** (a habit with a streak) or
+**Planned** (chosen days, optionally a weekly target such as 3× a week), and can have a
+deadline. Planned and daily subgoals show the current week as Monday-to-Sunday circles:
+a click plans a day, completes it or undoes it, and a right click (or long press) completes,
+moves or removes it. The calendar button plans days further ahead.
+
+The library root shows a `Goals` entry that opens an overview of all goals with
+Today, All, General and Daily filters. The folder defaults to `<first editable folder>/Goals`:
+
+```jsonc
+{
+  "goalsFolder": "Goals",
+}
+```
+
 ## Desktop client
 
 An optional Electron client opens library folders, images, videos, text, PDFs and books in native

@@ -19,6 +19,9 @@ import { AudioViewerPane } from './AudioViewerPane'
 import { VideoViewerPane } from './VideoViewerPane'
 import { TodoListPane } from '@/features/todo/TodoListPane'
 import { isTodoPath } from '@/features/todo/todo-model'
+import { GoalPane } from '@/features/goals/GoalPane'
+import { GoalsBoardPane } from '@/features/goals/GoalsBoardPane'
+import { isGoalPath, isGoalsBoardPath } from '@/features/goals/goal-model'
 
 const Reader = lazy(() =>
   import('@/features/reader/Reader').then((module) => ({ default: module.Reader })),
@@ -77,6 +80,9 @@ export function ViewerPane(props: Props) {
 
   const mediaType = createMemo(() => getMediaTypeFromPath(viewingPath()))
   const isTodo = createMemo(() => isTodoPath(viewingPath()))
+  const isGoal = createMemo(() => isGoalPath(viewingPath()))
+  const isGoalsBoard = createMemo(() => isGoalsBoardPath(viewingPath()))
+  const isPlanner = createMemo(() => isTodo() || isGoal() || isGoalsBoard())
 
   const downloadHref = createMemo(() => {
     const path = viewingPath()
@@ -98,6 +104,7 @@ export function ViewerPane(props: Props) {
         (mediaType() === MediaType.IMAGE ||
           mediaType() === MediaType.AUDIO ||
           mediaType() === MediaType.OTHER) &&
+        !isGoalsBoard() &&
         Boolean(viewingPath()),
     }
   })
@@ -238,8 +245,30 @@ export function ViewerPane(props: Props) {
         )}
       </Show>
 
+      <Show when={!readerKind() && isGoal() && viewingPath()} keyed>
+        {(sourcePath) => (
+          <GoalPane
+            viewingPath={sourcePath}
+            editableFolders={props.editableFolders}
+            embedded={props.presentation !== 'modal'}
+            showClose={props.presentation === 'modal'}
+            onClose={props.onClose}
+            onNavigate={props.onNavigateViewing}
+          />
+        )}
+      </Show>
+
+      <Show when={!readerKind() && isGoalsBoard()}>
+        <GoalsBoardPane
+          embedded={props.presentation !== 'modal'}
+          showClose={props.presentation === 'modal'}
+          onClose={props.onClose}
+          onNavigate={props.onNavigateViewing}
+        />
+      </Show>
+
       <Show
-        when={!readerKind() && !isTodo() && mediaType() === MediaType.TEXT && viewingPath()}
+        when={!readerKind() && !isPlanner() && mediaType() === MediaType.TEXT && viewingPath()}
         keyed
       >
         {(sourcePath) => (
@@ -256,7 +285,9 @@ export function ViewerPane(props: Props) {
         )}
       </Show>
 
-      <Show when={!readerKind() && mediaType() === MediaType.OTHER && viewingPath()}>
+      <Show
+        when={!readerKind() && !isPlanner() && mediaType() === MediaType.OTHER && viewingPath()}
+      >
         <Show when={props.presentation === 'modal' && unsupportedFile()} keyed>
           {(file) => (
             <div

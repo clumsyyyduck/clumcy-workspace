@@ -14,14 +14,14 @@ use serde_json::{Value, json};
 
 pub(crate) const TODO_SUFFIX: &str = ".todo.json";
 
-pub(crate) fn ensure_folder(config: &crate::config::Config) {
-    let Some(folder) = &config.todo_folder else {
+pub(crate) fn ensure_folder(folder: Option<&str>, config: &crate::config::Config) {
+    let Some(folder) = folder else {
         return;
     };
     if let Ok(resolved) = media::resolve(config, folder)
         && let Err(error) = std::fs::create_dir_all(&resolved.full)
     {
-        eprintln!("Failed to create TODO folder {folder}: {error}");
+        eprintln!("Failed to create folder {folder}: {error}");
     }
 }
 

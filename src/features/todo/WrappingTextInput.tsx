@@ -12,6 +12,8 @@ type Props = {
   readonly?: boolean
   /** Allows line breaks, e.g. for notes. */
   multiline?: boolean
+  /** Focuses the field with the caret at the end once it mounts. */
+  autofocus?: boolean
   onInput: (value: string) => void
   onBlur?: (value: string) => void
   onEnter?: (value: string) => void
@@ -50,6 +52,15 @@ export function WrappingTextInput(props: Props) {
       })
       observer.observe(textarea)
       return () => observer.disconnect()
+    },
+  )
+
+  createEffect(
+    () => element(),
+    (textarea) => {
+      if (!textarea || !props.autofocus) return
+      textarea.focus()
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     },
   )
 

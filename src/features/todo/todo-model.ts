@@ -100,6 +100,8 @@ export function serializeTodoDocument(document: TodoDocument): string {
 
 export function parseDue(due: string | undefined): Date | null {
   if (!due) return null
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(due)
+  if (day) return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
   const date = new Date(due)
   return Number.isNaN(date.getTime()) ? null : date
 }
@@ -116,10 +118,15 @@ export function dueInputValue(due: string | undefined): string {
 
 export const DEFAULT_DUE_TIME = '09:00'
 
+/** Local calendar day as `YYYY-MM-DD`. */
+export function dayKey(day: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
+}
+
 /** Builds a due value from a local calendar day and `HH:mm`. */
 export function composeDue(day: Date, time: string): string {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}T${time}`
+  return `${dayKey(day)}T${time}`
 }
 
 export function dueTime(due: string | undefined): string {

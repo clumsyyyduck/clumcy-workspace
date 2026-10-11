@@ -81,6 +81,7 @@ describe('admin event routing', () => {
       ['files'],
       ['content', 'admin'],
       ['todo'],
+      ['goals'],
       ['video-info'],
       ['video-subtitles'],
       ['settings'],

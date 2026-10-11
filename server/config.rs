@@ -55,6 +55,7 @@ struct RawConfig {
     #[serde(default)]
     music: MusicConfig,
     todo_folder: Option<String>,
+    goals_folder: Option<String>,
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -214,6 +215,7 @@ pub struct Config {
     pub media_ai: MediaAiConfig,
     pub music: MusicConfig,
     pub todo_folder: Option<String>,
+    pub goals_folder: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -840,7 +842,8 @@ impl Config {
                 .to_string_lossy()
                 .into_owned();
         }
-        let todo_folder = todo_folder(raw.todo_folder, &roots);
+        let todo_folder = planner_folder(raw.todo_folder, &roots, "TODO");
+        let goals_folder = planner_folder(raw.goals_folder, &roots, "Goals");
         Ok(Self {
             port,
             roots,
@@ -853,11 +856,16 @@ impl Config {
             media_ai,
             music: raw.music,
             todo_folder,
+            goals_folder,
         })
     }
 }
 
-fn todo_folder(configured: Option<String>, roots: &[MediaRoot]) -> Option<String> {
+fn planner_folder(
+    configured: Option<String>,
+    roots: &[MediaRoot],
+    default_name: &str,
+) -> Option<String> {
     if let Some(folder) = configured {
         let folder = folder
             .trim()
@@ -870,9 +878,9 @@ fn todo_folder(configured: Option<String>, roots: &[MediaRoot]) -> Option<String
         let folder = root.editable_folders.first()?.replace('\\', "/");
         let folder = folder.trim_matches('/');
         Some(if roots.len() > 1 {
-            format!("{}/{folder}/TODO", root.name)
+            format!("{}/{folder}/{default_name}", root.name)
         } else {
-            format!("{folder}/TODO")
+            format!("{folder}/{default_name}")
         })
     })
 }
